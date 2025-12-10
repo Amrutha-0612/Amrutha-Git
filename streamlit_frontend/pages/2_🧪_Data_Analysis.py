@@ -15,6 +15,47 @@ df = st.session_state.get('main_data_df')
 
 if df is not None:
     
+    # --- NEW SECTION: PENDING ORDER ANALYSIS (Based on STATUS) ---
+    st.markdown("<h3 style='color: #EE6C4D;'>0. Pending Orders Overview</h3>", unsafe_allow_html=True)
+    
+    # Logic: Identify Pending Orders based on STATUS column
+    if 'STATUS' in df.columns:
+        # Normalize status to lowercase for comparison
+        # Pending = Anything that is NOT 'delivered'
+        # Adjust 'delivered' string if your CSV uses a different term (e.g., 'Completed')
+        pending_mask = df['STATUS'].astype(str).str.strip().str.lower() != 'delivered'
+        
+        # Create a Pending DataFrame
+        df_pending = df[pending_mask].copy()
+        
+        total_pending = len(df_pending)
+        total_orders = len(df)
+        
+        col_p1, col_p2 = st.columns(2)
+        
+        with col_p1:
+            st.metric(label="Total Pending Orders", value=total_pending, 
+                      delta=f"{total_pending/total_orders*100:.1f}% of Total")
+            st.caption("*Based on items where Status is not 'Delivered'.*")
+            
+        with col_p2:
+            if not df_pending.empty and 'RESPONSIBLE_PERSON' in df_pending.columns:
+                # Mini-chart for pending per agent
+                pending_per_agent = df_pending['RESPONSIBLE_PERSON'].value_counts().reset_index()
+                pending_per_agent.columns = ['Agent', 'Pending Count']
+                
+                fig_pending = px.bar(pending_per_agent, x='Pending Count', y='Agent', orientation='h',
+                                     title="Pending Items by Agent", height=250,
+                                     color_discrete_sequence=['#EE6C4D'])
+                fig_pending.update_layout(margin=dict(l=0, r=0, t=30, b=0))
+                st.plotly_chart(fig_pending, use_container_width=True)
+            elif df_pending.empty:
+                st.success("No pending orders found! All items are delivered.")
+    else:
+        st.warning("Cannot calculate Pending Orders: 'STATUS' column missing.")
+
+    st.markdown("---")
+
     # --- SECTION 1: WORKLOAD DISTRIBUTION ---
     st.markdown("<h3 style='color: #EE6C4D;'>1. Workload Distribution by Agent and Priority</h3>", unsafe_allow_html=True)
     
@@ -94,7 +135,7 @@ if df is not None:
     st.markdown("<h3 style='color: #EE6C4D;'>3. Special Instructions/Issues List</h3>", unsafe_allow_html=True)
     
     if 'NOTES' in df.columns:
-        # Clean and identify items with notes
+        # Clean and identify items with notes (re-using cleaning from top if needed, or re-calculating)
         df['NOTES_CLEAN'] = df['NOTES'].fillna('').astype(str).str.strip()
         items_with_notes = df[df['NOTES_CLEAN'] != ''].copy()
         
